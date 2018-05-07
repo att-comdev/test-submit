@@ -1,0 +1,15 @@
+---
+schema: example/Kind/v1
+metadata:
+  schema: metadata/Document/v1
+  name: global-1234
+  labels:
+    key1: value1
+  layeringDefinition:
+    abstract: true
+    layer: global
+data:
+  a:
+    x: 1
+    y: 2
+...
