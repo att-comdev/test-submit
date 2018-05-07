@@ -1,0 +1,11 @@
+---
+schema: deckhand/CertificateKey/v1
+metadata:
+  name: example-key
+  schema: metadata/Document/v1
+  layeringDefinition:
+    layer: site
+  storagePolicy: cleartext
+data: |
+  KEY DATA
+...
