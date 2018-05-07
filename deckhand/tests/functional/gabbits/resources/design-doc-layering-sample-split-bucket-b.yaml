@@ -1,0 +1,50 @@
+---
+schema: example/Kind/v1
+metadata:
+  schema: metadata/Document/v1
+  name: region-1234
+  labels:
+    key1: value1
+  layeringDefinition:
+    abstract: true
+    layer: region
+    parentSelector:
+      key1: value1
+    actions:
+      - method: replace
+        path: .a
+data:
+  a:
+    z: 3
+---
+schema: example/Kind/v1
+metadata:
+  schema: metadata/Document/v1
+  name: site-with-merge-action
+  labels:
+    foo: bar
+    baz: qux
+  layeringDefinition:
+    layer: site
+    parentSelector:
+      key1: value1
+    actions:
+      - method: merge
+        path: .
+data:
+  b: 4
+---
+schema: example/Kind/v1
+metadata:
+  schema: metadata/Document/v1
+  name: site-with-delete-action
+  layeringDefinition:
+    layer: site
+    parentSelector:
+      key1: value1
+    actions:
+      - method: delete
+        path: .a
+# No data needed here, since we are deleting, not adding anything.
+data: {}
+...

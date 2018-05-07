@@ -1,0 +1,209 @@
+# 1. Test success paths for filtering revision documents for the following filters:
+#   * schema
+#   * metadata.name
+#   * metadata.label
+#   * metadata.layeringDefinition.abstract
+#   * metadata.layeringDefinition.layer
+#   * status.bucket
+#   * sort
+
+defaults:
+  request_headers:
+    content-type: application/x-yaml
+  response_headers:
+    content-type: application/x-yaml
+
+tests:
+  - name: purge
+    desc: Begin testing from known state.
+    DELETE: /api/v1.0/revisions
+    status: 204
+    response_headers: null
+
+  - name: initialize
+    desc: Create initial documents
+    PUT: /api/v1.0/buckets/mop/documents
+    status: 200
+    data: <@resources/design-doc-layering-sample-3-layers.yaml
+
+  - name: filter_by_schema
+    desc: Verify revision documents filtered by schema
+    GET: /api/v1.0/revisions/$RESPONSE['$.[0].status.revision']/documents
+    query_parameters:
+      schema: deckhand/LayeringPolicy/v1
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 1
+      $.[0].metadata.name: layering-policy
+      $.[0].schema: deckhand/LayeringPolicy/v1
+
+  - name: filter_by_schema_namespace
+    desc: Verify revision documents filtered by schema namespace
+    GET: /api/v1.0/revisions/$RESPONSE['$.[0].status.revision']/documents
+    query_parameters:
+      schema: example
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 3
+      $.[0].metadata.name: global-1234
+      $.[0].schema: example/Kind/v1
+      $.[1].metadata.name: region-1234
+      $.[1].schema: example/Kind/v1
+      $.[2].metadata.name: site-1234
+      $.[2].schema: example/Kind/v1
+
+  - name: filter_by_schema_namespace_and_kind
+    desc: Verify revision documents filtered by schema namespace and kind
+    GET: /api/v1.0/revisions/$RESPONSE['$.[0].status.revision']/documents
+    query_parameters:
+      schema: example/Kind
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 3
+      $.[0].metadata.name: global-1234
+      $.[0].schema: example/Kind/v1
+      $.[1].metadata.name: region-1234
+      $.[1].schema: example/Kind/v1
+      $.[2].metadata.name: site-1234
+      $.[2].schema: example/Kind/v1
+
+  - name: filter_by_metadata_name
+    desc: Verify revision documents filtered by metadata.name
+    GET: /api/v1.0/revisions/$RESPONSE['$.[0].status.revision']/documents
+    query_parameters:
+      metadata.name: layering-policy
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 1
+      $.[0].metadata.name: layering-policy
+
+  - name: filter_by_metadata_label
+    desc: Verify revision documents filtered by metadata.name
+    GET: /api/v1.0/revisions/$RESPONSE['$.[0].status.revision']/documents
+    query_parameters:
+      metadata.label: key1=value1
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 2
+      $.[*].metadata.name:
+        - global-1234
+        - region-1234
+      $.[*].metadata.labels:
+        - key1: value1
+        - key1: value1
+
+  - name: filter_by_metadata_layeringdefinition_abstract
+    desc: Verify revision documents filtered by metadata.layeringDefinition.abstract
+    GET: /api/v1.0/revisions/$RESPONSE['$.[0].status.revision']/documents
+    query_parameters:
+      metadata.layeringDefinition.abstract: true
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 2
+      $.[*].metadata.name:
+        - global-1234
+        - region-1234
+      $.[*].metadata.layeringDefinition.abstract:
+        - true
+        - true
+
+  - name: filter_by_metadata_layeringdefinition_layer
+    desc: Verify revision documents filtered by metadata.layeringDefinition.layer
+    GET: /api/v1.0/revisions/$RESPONSE['$.[0].status.revision']/documents
+    query_parameters:
+      metadata.layeringDefinition.layer: site
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 1
+      $.[0].metadata.name: site-1234
+      $.[0].metadata.layeringDefinition.layer: site
+
+  - name: filter_by_bucket_name
+    desc: Verify revision documents filtered by status.bucket
+    GET: /api/v1.0/revisions/$RESPONSE['$.[0].status.revision']/documents
+    query_parameters:
+      status.bucket: mop
+      sort: metadata.name
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 4
+      $.[*].metadata.name:
+        - global-1234
+        - layering-policy
+        - region-1234
+        - site-1234
+      $.[*].status.bucket:
+        - mop
+        - mop
+        - mop
+        - mop
+
+  - name: sort_by_metadata_name
+    desc: Verify revision documents sorted by metadata.name
+    GET: /api/v1.0/revisions/$RESPONSE['$.[0].status.revision']/documents
+    query_parameters:
+      sort: metadata.name
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 4
+      $.[*].metadata.name:
+        - global-1234
+        - layering-policy
+        - region-1234
+        - site-1234
+
+  - name: sort_by_schema
+    desc: Verify revision documents sorted by schema
+    GET: /api/v1.0/revisions/$RESPONSE['$.[0].status.revision']/documents
+    query_parameters:
+      sort: schema
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 4
+      $.[*].schema:
+        - deckhand/LayeringPolicy/v1
+        - example/Kind/v1
+        - example/Kind/v1
+        - example/Kind/v1
+
+  - name: sort_by_schema_then_metadata
+    desc: Verify revision documents sorted by (schema, metadata)
+    GET: /api/v1.0/revisions/$RESPONSE['$.[0].status.revision']/documents
+    query_parameters:
+      sort:
+        - schema
+        - metadata.name
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 4
+      $.[*].schema:
+        - deckhand/LayeringPolicy/v1
+        - example/Kind/v1
+        - example/Kind/v1
+        - example/Kind/v1
+      $.[*].metadata.name:
+        - layering-policy
+        - global-1234
+        - region-1234
+        - site-1234
+
+  - name: sort_by_metadata_then_schema
+    desc: Verify revision documents sorted by (metadata, schema)
+    GET: /api/v1.0/revisions/$RESPONSE['$.[0].status.revision']/documents
+    query_parameters:
+      sort:
+        - metadata.name
+        - schema
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 4
+      $.[*].metadata.name:
+        - global-1234
+        - layering-policy
+        - region-1234
+        - site-1234
+      $.[*].schema:
+        - example/Kind/v1
+        - deckhand/LayeringPolicy/v1
+        - example/Kind/v1
+        - example/Kind/v1
