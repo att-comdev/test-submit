@@ -1,0 +1,263 @@
+# Test success path for rollback with a single bucket.
+#
+#  1. Purges existing data to ensure test isolation
+#  2. Creates some initial documents (via 4 requests for different buckets)
+#  3. Verify expected diffs for null revision
+#     - Each of the 4 initial document PUTs vs null
+#     - null vs itself
+#  4. Modify bucket c
+#  5. Verify diff between create_d and update_c
+#  6. Delete bucket b
+#  7. Create bucket "mistake"
+#  8. Remove bucket "mistake"
+#  9. Verify diff between creating and deleting bucket "mistake"
+#  10. Create bucket e
+#  11. Verify diff between create_d and create_e
+#  12. Verify diff of final state with null
+
+defaults:
+  request_headers:
+    content-type: application/x-yaml
+  response_headers:
+    content-type: application/x-yaml
+
+tests:
+  - name: purge
+    desc: Begin testing from known state.
+    DELETE: /api/v1.0/revisions
+    status: 204
+    response_headers: null
+
+  - name: create_a
+    desc: Create documents in bucket a
+    PUT: /api/v1.0/buckets/bucket_a/documents
+    status: 200
+    data: |-
+      ---
+      schema: example/Kind/v1
+      metadata:
+        schema: metadata/Document/v1
+        name: doc-a
+        layeringDefinition:
+          abstract: false
+          layer: site
+      data:
+        value: 1
+      ...
+
+  - name: create_b
+    desc: Create documents in bucket b
+    PUT: /api/v1.0/buckets/bucket_b/documents
+    status: 200
+    data: |-
+      ---
+      schema: example/Kind/v1
+      metadata:
+        schema: metadata/Document/v1
+        name: doc-b
+        layeringDefinition:
+          abstract: false
+          layer: site
+      data:
+        value: 2
+      ...
+
+  - name: create_c
+    desc: Create documents in bucket c
+    PUT: /api/v1.0/buckets/bucket_c/documents
+    status: 200
+    data: |-
+      ---
+      schema: example/Kind/v1
+      metadata:
+        schema: metadata/Document/v1
+        name: doc-c
+        layeringDefinition:
+          abstract: false
+          layer: site
+      data:
+        value: 3
+      ...
+
+  - name: create_d
+    desc: Create documents in bucket d
+    PUT: /api/v1.0/buckets/bucket_d/documents
+    status: 200
+    data: |-
+      ---
+      schema: example/Kind/v1
+      metadata:
+        schema: metadata/Document/v1
+        name: doc-d
+        layeringDefinition:
+          abstract: false
+          layer: site
+      data:
+        value: 4
+      ...
+
+  - name: verify_null_first_revision
+    desc: Validates response for null diff for first revision
+    GET: /api/v1.0/revisions/0/diff/$HISTORY['create_a'].$RESPONSE['$.[0].status.revision']
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 1
+      $.[0]:
+        bucket_a: created
+
+  - name: verify_null_second_revision
+    desc: Validates response for null diff for second revision
+    GET: /api/v1.0/revisions/0/diff/$HISTORY['create_b'].$RESPONSE['$.[0].status.revision']
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 1
+      $.[0]:
+        bucket_a: created
+        bucket_b: created
+
+  - name: verify_null_third_revision
+    desc: Validates response for null diff for third revision
+    GET: /api/v1.0/revisions/0/diff/$HISTORY['create_c'].$RESPONSE['$.[0].status.revision']
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 1
+      $.[0]:
+        bucket_a: created
+        bucket_b: created
+        bucket_c: created
+
+  - name: verify_null_fourth_revision
+    desc: Validates response for null diff for fourth revision
+    GET: /api/v1.0/revisions/0/diff/$HISTORY['create_d'].$RESPONSE['$.[0].status.revision']
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 1
+      $.[0]:
+        bucket_a: created
+        bucket_b: created
+        bucket_c: created
+        bucket_d: created
+
+  - name: verify_null_self
+    desc: Validates response for null diff for fourth revision
+    GET: /api/v1.0/revisions/0/diff/0
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 1
+      $.[0]: {}
+
+  - name: update_c
+    desc: Update document in bucket c
+    PUT: /api/v1.0/buckets/bucket_c/documents
+    status: 200
+    data: |-
+      ---
+      schema: example/Kind/v1
+      metadata:
+        schema: metadata/Document/v1
+        name: doc-c
+        layeringDefinition:
+          abstract: false
+          layer: site
+      data:
+        new_value: 7
+      ...
+
+  - name: verify_diff_between_initial_4_buckets_and_single_update
+    desc: Validates response for null diff between the first 4 buckets and single update
+    GET: /api/v1.0/revisions/$HISTORY['create_d'].$RESPONSE['$.[0].status.revision']/diff/$HISTORY['update_c'].$RESPONSE['$.[0].status.revision']
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 1
+      $.[0]:
+        bucket_a: unmodified
+        bucket_b: unmodified
+        bucket_c: modified
+        bucket_d: unmodified
+
+  - name: delete_b
+    desc: Delete documents from bucket b
+    PUT: /api/v1.0/buckets/bucket_b/documents
+    status: 200
+    data: ""
+
+  - name: create_mistake
+    desc: Create documents in bucket mistake
+    PUT: /api/v1.0/buckets/bucket_mistake/documents
+    status: 200
+    data: |-
+      ---
+      schema: example/Kind/v1
+      metadata:
+        schema: metadata/Document/v1
+        name: doc-m
+        layeringDefinition:
+          abstract: false
+          layer: site
+      data:
+        value: mistake
+
+  - name: delete_mistake
+    desc: Delete documents from bucket mistake
+    PUT: /api/v1.0/buckets/bucket_mistake/documents
+    status: 200
+    data: ""
+    # Verification for whether a bucket_name was returned even though all the
+    # documents for this bucket were deleted.
+    response_multidoc_jsonpaths:
+      $.`len`: 1
+      $.[*].status.bucket: bucket_mistake
+
+  - name: verify_diff_between_created_and_deleted_mistake
+    desc: Validates response for deletion between the last 2 revisions
+    GET: /api/v1.0/revisions/$HISTORY['create_mistake'].$RESPONSE['$.[0].status.revision']/diff/$HISTORY['delete_mistake'].$RESPONSE['$.[0].status.revision']
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 1
+      $.[0]:
+        bucket_a: unmodified
+        bucket_c: unmodified
+        bucket_d: unmodified
+        bucket_mistake: deleted
+
+  - name: create_e
+    desc: Create documents in bucket e
+    PUT: /api/v1.0/buckets/bucket_e/documents
+    status: 200
+    data: |-
+      ---
+      schema: example/Kind/v1
+      metadata:
+        schema: metadata/Document/v1
+        name: doc-e
+        layeringDefinition:
+          abstract: false
+          layer: site
+      data:
+        value: 6
+      ...
+
+  - name: verify_diff_between_initial_4_buckets_and_present
+    desc: Validates response for null diff between the first 4 buckets and now
+    GET: /api/v1.0/revisions/$HISTORY['create_d'].$RESPONSE['$.[0].status.revision']/diff/$HISTORY['create_e'].$RESPONSE['$.[0].status.revision']
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 1
+      $.[0]:
+        bucket_a: unmodified
+        bucket_b: deleted
+        bucket_c: modified
+        bucket_d: unmodified
+        bucket_e: created
+
+  - name: verify_diff_between_null_and_present
+    desc: Validates response for null diff and now
+    GET: /api/v1.0/revisions/0/diff/$HISTORY['create_e'].$RESPONSE['$.[0].status.revision']
+    status: 200
+    response_multidoc_jsonpaths:
+      $.`len`: 1
+      $.[0]:
+        bucket_a: created
+        bucket_c: created
+        bucket_d: created
+        bucket_e: created
